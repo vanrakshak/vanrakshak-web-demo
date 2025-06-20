@@ -1,129 +1,84 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VanRakshak: Forest Monitor</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #e6f2e6;
-      color: #003300;
-      margin: 0;
-      padding: 0;
-    }
-    header {
-      background: #006600;
-      color: white;
-      padding: 1em;
-      text-align: center;
-      font-size: 1.5em;
-    }
-    .video-section {
-      display: flex;
-      justify-content: space-around;
-      flex-wrap: wrap;
-      padding: 20px;
-    }
-    .video-container {
-      width: 45%;
-      background: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      padding: 10px;
-      margin-bottom: 20px;
-    }
-    video {
-      width: 100%;
-      border-radius: 10px;
-    }
-    .status {
-      margin-top: 10px;
-      font-weight: bold;
-      text-align: center;
-    }
-    .positive {
-      color: green;
-    }
-    .negative {
-      color: red;
-    }
-  </style>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
-</head>
-<body>
-  <header>
-    VanRakshak: Voice of the Forest — Monitoring Two Forest Areas 🌲
-  </header>
-
-  <div class="video-section">
-    <div class="video-container">
-      <h3>Region 1: Healthy Forest</h3>
-      <video id="video1" src="https://drive.google.com/uc?export=download&id=1UL72Hl6d8jD0jBgn0YCwegES0YtoVbfe" autoplay muted loop></video>
-      <div class="status" id="status1">Analyzing...</div>
-    </div>
-    <div class="video-container">
-      <h3>Region 2: Deforestation Activity</h3>
-      <video id="video2" src="https://drive.google.com/file/d/10ciAaUrBoTyC8oRxXjsK2FsGnUe_QGAz/view?usp=drive_link
-👇
-https://drive.google.com/uc?export=download&id=10ciAaUrBoTyC8oRxXjsK2FsGnUe_QGAz
-" autoplay muted loop></video>
-      <div class="status" id="status2">Analyzing...</div>
-    </div>
-  </div>
-
-  <script>
-    const URL = "https://raw.githubusercontent.com/vanrakshak/deforestation-model/main/my-model/";
-    const webhookURL = "https://hooks.zapier.com/hooks/catch/23385669/uyv9jhs/";
-
-    let model, maxPredictions;
-    const alerted = { region1: { early: false, major: false }, region2: { early: false, major: false } };
-
-    async function init() {
-      const modelURL = URL + "model.json";
-      const metadataURL = URL + "metadata.json";
-      model = await tmImage.load(modelURL, metadataURL);
-      maxPredictions = model.getTotalClasses();
-      setInterval(() => predict("video1", "status1", "region1"), 1500);
-      setInterval(() => predict("video2", "status2", "region2"), 1500);
-    }
-
-    async function predict(videoId, statusId, regionKey) {
-      const video = document.getElementById(videoId);
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext("2d");
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const prediction = await model.predict(canvas);
-      prediction.sort((a, b) => b.probability - a.probability);
-      const top = prediction[0];
-
-      const status = document.getElementById(statusId);
-      status.innerHTML = `${top.className}: ${(top.probability * 100).toFixed(1)}%`;
-      status.className = `status ${top.className.toLowerCase().includes("healthy") ? "positive" : "negative"}`;
-
-      if ((top.className.toLowerCase().includes("early") && !alerted[regionKey].early) ||
-          (top.className.toLowerCase().includes("major") && !alerted[regionKey].major)) {
-        alerted[regionKey][top.className.toLowerCase().includes("early") ? "early" : "major"] = true;
-        sendAlert(regionKey, top.className);
+<html>
+  <head>
+    <title>VanRakshak: Forest Monitoring from Video</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image"></script>
+    <style>
+      body {
+        font-family: sans-serif;
+        text-align: center;
+        background: #eef9ef;
+        padding: 20px;
       }
-    }
+      canvas {
+        border-radius: 12px;
+      }
+      .positive { color: green; font-weight: bold; }
+      .negative { color: red; font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <h1>🌲 VanRakshak: AI Forest Monitoring</h1>
+    <div id="status">Loading model...</div>
+    <script>
+      let modelURL = "https://raw.githubusercontent.com/vanrakshak/deforestation-model/main/my-model/";
+      let zapierURL = "https://hooks.zapier.com/hooks/catch/23385669/uyv9jhs/";
+      let model, video, labelContainer;
+      let alertSent = { early: false, major: false };
 
-    async function sendAlert(region, alertType) {
-      await fetch(webhookURL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          region: region,
-          type: alertType,
-          time: new Date().toISOString()
-        })
-      });
-    }
+      async function setup() {
+        model = await tmImage.load(modelURL + "model.json", modelURL + "metadata.json");
+        document.getElementById("status").innerText = "Model Loaded ✅";
 
-    window.addEventListener("load", init);
-  </script>
-</body>
+        video = document.createElement("video");
+        video.src = "https://drive.google.com/uc?export=download&id=10ciAaUrBoTyC8oRxXjsK2FsGnUe_QGAz"; // REGION 2 VIDEO
+        video.crossOrigin = "anonymous";
+        video.autoplay = true;
+        video.loop = true;
+        video.muted = true;
+        video.width = 400;
+        document.body.appendChild(video);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = 400;
+        canvas.height = 300;
+        document.body.appendChild(canvas);
+        const ctx = canvas.getContext("2d");
+
+        labelContainer = document.createElement("div");
+        document.body.appendChild(labelContainer);
+
+        setInterval(async () => {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const prediction = await model.predict(canvas);
+          prediction.sort((a, b) => b.probability - a.probability);
+          const top = prediction[0];
+          labelContainer.innerHTML = `Prediction: ${top.className} (${(top.probability * 100).toFixed(1)}%)`;
+          labelContainer.className = top.className.toLowerCase().includes("healthy") ? "positive" : "negative";
+
+          if (top.probability > 0.85) {
+            if (top.className.toLowerCase().includes("early") && !alertSent.early) {
+              alertSent.early = true;
+              sendAlert("Early Deforestation");
+            } else if (top.className.toLowerCase().includes("major") && !alertSent.major) {
+              alertSent.major = true;
+              sendAlert("Major Deforestation");
+            }
+          }
+        }, 1500);
+      }
+
+      async function sendAlert(type) {
+        await fetch(zapierURL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ alert: type, time: new Date().toISOString() })
+        });
+        console.log("Alert sent:", type);
+      }
+
+      window.onload = setup;
+    </script>
+  </body>
 </html>
